@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 
@@ -6,36 +6,22 @@ import HeroBanner from '@/components/common/HeroBanner';
 import callApi, { HttpMethod } from '@/api/callApi';
 
 import emptyReadyImg from '@/assets/empty/ready.png';
-import { CATEGORIES, type CategoryKo } from '@/constants';
-import { OBJECT_IDS_BY_CATEGORY, type ModelItem, type ObjectsByIdsResponse } from '@/types';
+import { CATEGORIES, STUDY_HISTORY_CHANGED_EVENT, STUDY_HISTORY_STORAGE_KEY, type CategoryKo } from '@/constants';
 
-// ---- (임시) 학습 기록 더미 ----
-const STUDY_HISTORY: ModelItem[] = [
-  {
-    id: 'drone',
-    title: 'DRONE',
-    desc: '회전익 항공기의 양력 발생 원리',
-    category: '항공우주',
-    thumb: '/assets/thumbs/drone.png',
-    tags: ['세션보기', '메모보기'],
-  },
-  {
-    id: 'leaf_spring',
-    title: 'LEAF SPRING',
-    desc: '현가장치의 탄성 변형과 힘 전달',
-    category: '자동차공학',
-    thumb: '/assets/thumbs/leaf_spring.png',
-    tags: ['세션보기', '메모보기'],
-  },
-  {
-    id: 'machine_vice',
-    title: 'MACHINE VICE',
-    desc: '나사의 역학적 원리',
-    category: '기계공학',
-    thumb: '/assets/thumbs/machine_vice.png',
-    tags: ['세션보기', '메모보기'],
-  },
-];
+import type { ModelItem, ObjectsByIdsResponse, ObjectsListResponse } from '@/types';
+import { getStudyHistoryIds, pushStudyHistoryId } from '@/utils/studyHistoryStorage';
+
+// Swagger enum(서버) 매핑
+const CATEGORY_TO_ENUM: Record<Exclude<CategoryKo, '전체'>, string> = {
+  자동차공학: 'AUTOMOTIVE_ENGINEERING',
+  기계공학: 'MECHANICAL_ENGINEERING',
+  로봇공학: 'ROBOTICS_ENGINEERING',
+  의공학: 'BIOMEDICAL_ENGINEERING',
+  생명공학: 'BIOTECHNOLOGY',
+  항공우주: 'AEROSPACE_ENGINEERING',
+  전기전자: 'ELECTRICAL_ELECTRONIC_ENGINEERING',
+  토목: 'CIVIL_ENGINEERING',
+};
 
 // ---- UI Components ----
 const ModelCard = ({ item, onClick }: { item: ModelItem; onClick: () => void }) => (
@@ -47,7 +33,6 @@ const ModelCard = ({ item, onClick }: { item: ModelItem; onClick: () => void }) 
                hover:shadow-[0_20px_40px_rgba(0,0,0,0.45)]
                overflow-hidden cursor-pointer'
   >
-    {/* 썸네일 */}
     <div className='p-3'>
       <div className='relative aspect-video rounded-xl overflow-hidden bg-[#20242C]'>
         {item.thumb ? (
@@ -62,7 +47,6 @@ const ModelCard = ({ item, onClick }: { item: ModelItem; onClick: () => void }) 
       </div>
     </div>
 
-    {/* 콘텐츠 */}
     <div className='px-4 pb-4'>
       <h3 className='text-sm font-semibold text-white/90 tracking-wide'>{item.title}</h3>
       <p className='mt-1 text-xs text-white/45 line-clamp-1'>{item.desc}</p>
@@ -116,62 +100,137 @@ export default function DashboardPage() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryKo>('전체');
   const [query, setQuery] = useState('');
 
-  // API로 받아온 모델 목록
+  //  학습 가능한 모델 (/objects?category=...)
   const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAvailable, setIsLoadingAvailable] = useState(false);
 
-  // React StrictMode에서 effect 2번 실행 방지(개발환경)
-  const lastRequestKey = useRef<string>('');
+  //  학습 기록 모델 (/objects/by-ids?ids=...)
+  const [historyModels, setHistoryModels] = useState<ModelItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // /objects/by-ids 호출
+  // StrictMode 중복 호출 방지 키
+  const lastAvailableKey = useRef<string>('');
+  const lastHistoryKey = useRef<string>('');
+
+  // -----------------------------------
+  // 1) 학습 가능한 모델: 목록 조회 호출
+  // -----------------------------------
   useEffect(() => {
-    const fetchObjectsByIds = async () => {
-      const ids = OBJECT_IDS_BY_CATEGORY[selectedCategory] ?? [];
+    const fetchObjectsList = async () => {
+      const categoryEnum =
+        selectedCategory === '전체' ? undefined : CATEGORY_TO_ENUM[selectedCategory as Exclude<CategoryKo, '전체'>];
 
-      // ids 없으면 비우고 종료 (EmptyState 보이게)
-      if (ids.length === 0) {
-        setAvailableModels([]);
-        return;
-      }
+      const requestKey = `LIST:${categoryEnum ?? 'ALL'}`;
+      if (lastAvailableKey.current === requestKey) return;
+      lastAvailableKey.current = requestKey;
 
-      const requestKey = `BY_IDS:${ids.join(',')}`;
-      if (lastRequestKey.current === requestKey) return;
-      lastRequestKey.current = requestKey;
-
-      setIsLoading(true);
+      setIsLoadingAvailable(true);
       try {
-        const url = `/objects/by-ids?ids=${ids.join(',')}`;
-        const res = await callApi<ObjectsByIdsResponse>(url, HttpMethod.GET);
+        const url = categoryEnum ? `/objects?category=${categoryEnum}` : `/objects`;
+        const res = await callApi<ObjectsListResponse>(url, HttpMethod.GET);
 
         const mapped: ModelItem[] =
           res?.result?.map((o) => ({
             id: String(o.objectId),
             title: o.objectNameEn || o.objectNameKr,
-            desc: o.objectcontent,
-            category: selectedCategory, // by-ids 응답엔 category가 없으니 선택값으로 표시
+            desc: o.objectContent ?? o.objectcontent ?? '',
+            category: selectedCategory,
             thumb: o.objectImageUrl,
             tags: (o.objectTags ?? []).slice(0, 2),
           })) ?? [];
 
         setAvailableModels(mapped);
       } catch (e) {
-        console.error('Failed to fetch objects by ids:', e);
+        console.error('Failed to fetch objects list:', e);
         setAvailableModels([]);
       } finally {
-        setIsLoading(false);
+        setIsLoadingAvailable(false);
       }
     };
 
-    fetchObjectsByIds();
+    fetchObjectsList();
   }, [selectedCategory]);
 
+  // -----------------------------------
+  // 2) 학습 기록: by-ids 호출 (자동 갱신)
+  // -----------------------------------
+  const fetchHistoryByIds = useCallback(async () => {
+    const ids = getStudyHistoryIds(); // string[]
+    if (ids.length === 0) {
+      setHistoryModels([]);
+      return;
+    }
+
+    const requestKey = `HISTORY_BY_IDS:${ids.join(',')}`;
+    if (lastHistoryKey.current === requestKey) return;
+    lastHistoryKey.current = requestKey;
+
+    setIsLoadingHistory(true);
+    try {
+      const url = `/objects/by-ids?ids=${ids.join(',')}`;
+      const res = await callApi<ObjectsByIdsResponse>(url, HttpMethod.GET);
+
+      const mapped: ModelItem[] =
+        res?.result?.map((o) => ({
+          id: String(o.objectId),
+          title: o.objectNameEn || o.objectNameKr,
+          desc: o.objectContent ?? o.objectcontent ?? '',
+          category: '학습기록',
+          thumb: o.objectImageUrl,
+          tags: (o.objectTags ?? []).slice(0, 2),
+        })) ?? [];
+
+      //  ids 순서 유지(최근 본 순)
+      const order = new Map(ids.map((id, idx) => [id, idx]));
+      mapped.sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
+
+      setHistoryModels(mapped);
+    } catch (e) {
+      console.error('Failed to fetch history objects by ids:', e);
+      setHistoryModels([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 최초 로드
+    fetchHistoryByIds();
+
+    //  같은 탭: pushStudyHistoryId()가 쏴주는 이벤트로 갱신
+    const onHistoryChanged = () => fetchHistoryByIds();
+
+    //  다른 탭: storage 이벤트로 갱신
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STUDY_HISTORY_STORAGE_KEY) fetchHistoryByIds();
+    };
+
+    //  viewer 갔다가 뒤로 돌아오는 경우(포커스/탭 활성화)
+    const onFocus = () => fetchHistoryByIds();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchHistoryByIds();
+    };
+
+    window.addEventListener(STUDY_HISTORY_CHANGED_EVENT, onHistoryChanged);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener(STUDY_HISTORY_CHANGED_EVENT, onHistoryChanged);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchHistoryByIds]);
+
+  // 검색 필터
   const filteredHistory = useMemo(() => {
-    return STUDY_HISTORY.filter((m) => {
-      const catOk = selectedCategory === '전체' ? true : m.category === selectedCategory;
+    return historyModels.filter((m) => {
       const qOk = query ? (m.title + m.desc).toLowerCase().includes(query.toLowerCase()) : true;
-      return catOk && qOk;
+      return qOk;
     });
-  }, [selectedCategory, query]);
+  }, [historyModels, query]);
 
   const filteredAvailable = useMemo(() => {
     return availableModels.filter((m) => {
@@ -180,8 +239,8 @@ export default function DashboardPage() {
     });
   }, [availableModels, query]);
 
-  const isEmptyForCategory =
-    selectedCategory !== '전체' && filteredHistory.length === 0 && !isLoading && filteredAvailable.length === 0;
+  // 빈 상태 판단(카테고리별로 학습가능 모델이 없을 때)
+  const isEmptyForCategory = selectedCategory !== '전체' && !isLoadingAvailable && filteredAvailable.length === 0;
 
   return (
     <div className='min-h-screen bg-[#0E1116] text-white'>
@@ -204,7 +263,7 @@ export default function DashboardPage() {
                 <button
                   key={c}
                   onClick={() => {
-                    lastRequestKey.current = '';
+                    lastAvailableKey.current = '';
                     setSelectedCategory(c);
                   }}
                   className={`w-full text-left rounded-xl px-4 py-3 text-sm transition relative cursor-pointer
@@ -246,26 +305,46 @@ export default function DashboardPage() {
               <EmptyState title={selectedCategory} />
             ) : (
               <>
-                {/* 학습 기록 */}
+                {/*  학습 기록 */}
                 <section className='mt-6'>
-                  <h3 className='text-sm font-semibold text-white/80'>학습 기록</h3>
+                  <div className='flex items-center justify-between'>
+                    <h3 className='text-sm font-semibold text-white/80'>학습 기록</h3>
+                    {isLoadingHistory && <span className='text-xs text-white/50'>불러오는 중...</span>}
+                  </div>
+
                   <div className='mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
                     {filteredHistory.map((m) => (
-                      <ModelCard key={m.id} item={m} onClick={() => navigate(`/viewer/${m.id}`)} />
+                      <ModelCard
+                        key={m.id}
+                        item={m}
+                        onClick={() => {
+                          //  학습기록에서 들어가도 최근순 갱신되게 저장
+                          pushStudyHistoryId(m.id);
+                          navigate(`/viewer/${m.id}`);
+                        }}
+                      />
                     ))}
                   </div>
                 </section>
 
-                {/* 학습 가능한 모델 (API 데이터) */}
+                {/*  학습 가능한 모델 */}
                 <section className='mt-10'>
                   <div className='flex items-center justify-between'>
                     <h3 className='text-sm font-semibold text-white/80'>학습 가능한 모델</h3>
-                    {isLoading && <span className='text-xs text-white/50'>불러오는 중...</span>}
+                    {isLoadingAvailable && <span className='text-xs text-white/50'>불러오는 중...</span>}
                   </div>
 
                   <div className='mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
                     {filteredAvailable.map((m) => (
-                      <ModelCard key={m.id} item={m} onClick={() => navigate(`/viewer/${m.id}`)} />
+                      <ModelCard
+                        key={m.id}
+                        item={m}
+                        onClick={() => {
+                          //  여기서 저장이 누락되면 localStorage에 안 쌓임!
+                          pushStudyHistoryId(m.id);
+                          navigate(`/viewer/${m.id}`);
+                        }}
+                      />
                     ))}
                   </div>
                 </section>
