@@ -86,3 +86,9 @@ export interface PartMeshProps {
     explodeDir: THREE.Vector3;
     explodeDist: number;
 }
+
+// 기관 데이터 인터페이스 정의
+export interface Institution {
+    institutionId: number;
+    institutionName: string;
+}
