@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { ChevronDown } from 'lucide-react';
+import callApi, { HttpMethod } from '../api/callApi'; // API 호출 함수 import
 
 // 이미지 파일 불러오기
 import logoImg from '../assets/logo.png';
+import type {Institution} from "@/types";
 
 // 로고 컴포넌트 (좌측 하단 작은 로고)
 const Logo = () => (
@@ -24,7 +26,30 @@ const LandingPage = () => {
 
     const [instId, setInstId] = useState('');
     const [otp, setOtp] = useState<string[]>(new Array(6).fill(""));
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    // 컴포넌트 마운트 시 기관 목록 조회 API 호출
+    useEffect(() => {
+        const fetchInstitutions = async () => {
+            try {
+                // API 호출: GET /members/institutions
+                const response = await callApi<{ result: Institution[] }>(
+                    '/members/institutions',
+                    HttpMethod.GET
+                );
+
+                if (response && response.result) {
+                    setInstitutions(response.result);
+                }
+            } catch (error) {
+                console.error("Failed to fetch institutions:", error);
+                // 에러 처리 로직 추가 가능 (예: 알림 표시)
+            }
+        };
+
+        fetchInstitutions();
+    }, []);
 
     // 6자리 코드 입력 핸들러
     const handleOtpChange = (element: HTMLInputElement, index: number) => {
@@ -107,8 +132,12 @@ const LandingPage = () => {
                                     onChange={(e) => setInstId(e.target.value)}
                                 >
                                     <option value="" disabled>해당하는 기관을 선택해주세요</option>
-                                    <option value="univ_A">한국대학교 (Korea Univ)</option>
-                                    <option value="univ_B">미래공과대학교 (Future Tech)</option>
+                                    {/* API 데이터로 옵션 렌더링 */}
+                                    {institutions.map((inst) => (
+                                        <option key={inst.institutionId} value={inst.institutionId.toString()}>
+                                            {inst.institutionName}
+                                        </option>
+                                    ))}
                                 </select>
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none w-5 h-5" />
                             </div>
