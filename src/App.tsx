@@ -1,35 +1,47 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+import LandingPage from '@/pages/LandingPage';
+import ViewerPage from '@/pages/ViewerPage';
+import DashboardPage from '@/pages/DashboardPage';
+import { useAuthStore } from '@/store/authStore';
+
+// Protected Route Wrapper
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+    // 인증되지 않았다면 랜딩 페이지("/")로 리다이렉트
+    return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
+};
 
 function App() {
-  const [count, setCount] = useState(0)
+    return (
+        <BrowserRouter>
+            <Routes>
+                {/* 공개 라우트 (랜딩) */}
+                <Route path="/" element={<LandingPage />} />
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+                {/* 보호된 라우트 (로그인 필요) */}
+                <Route
+                    path="/dashboard"
+                    element={
+                        <ProtectedRoute>
+                            <DashboardPage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/viewer/:id"
+                    element={
+                        <ProtectedRoute>
+                            <ViewerPage />
+                        </ProtectedRoute>
+                    }
+                />
+
+                {/* 잘못된 경로는 랜딩으로 리다이렉트 (선택 사항) */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </BrowserRouter>
+    );
 }
 
-export default App
+export default App;
