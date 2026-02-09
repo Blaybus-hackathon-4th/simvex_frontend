@@ -114,16 +114,26 @@ export const OBJECT_IDS_BY_CATEGORY: Record<CategoryKo, number[]> = {
   전기전자: [],
   토목: [],
 };
-export type ObjectsByIdsResponse = {
+
+export type ObjectSummary = {
+  objectId: number;
+  objectImageUrl: string;
+  objectNameKr: string;
+  objectNameEn: string;
+  objectContent?: string; // 서버가 objectContent로 주는 경우
+  objectcontent?: string; // 서버가 objectcontent로 주는 경우(오타/스펙 불일치 대응)
+  objectTags: string[];
+};
+
+export type ApiResponse<T> = {
   isSuccess: boolean;
   code: string;
   message: string;
-  result: Array<{
-    objectId: number;
-    objectImageUrl: string;
-    objectNameKr: string;
-    objectNameEn: string;
-    objectcontent: string;
-    objectTags: string[];
-  }>;
+  result: T;
 };
+
+// /objects?category=...
+export type ObjectsListResponse = ApiResponse<ObjectSummary[]>;
+
+// /objects/by-ids?ids=1,2
+export type ObjectsByIdsResponse = ApiResponse<ObjectSummary[]>;
