@@ -70,7 +70,7 @@ const LandingPage = () => {
       const res = await callApi<LoginResponse>('/members/login', HttpMethod.POST, body);
 
       if (res?.isSuccess) {
-        // ✅ accessToken은 Set-Cookie로 저장되므로 여기서는 성공만 처리
+        // accessToken은 Set-Cookie로 저장되므로 여기서는 성공만 처리
         navigate('/dashboard');
       } else {
         alert(res?.message ?? '인증 코드를 확인해주세요.');
