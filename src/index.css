@@ -1,68 +1,33 @@
+/* 1. Tailwind CSS v4 불러오기 */
+@import "tailwindcss";
+
+/* 2. SIMVEX 프로젝트 전용 테마 설정 */
+@theme {
+  /* 색상 변수 정의 (React 코드에서 bg-background, text-primary 등으로 사용) */
+  --color-background: #0a0a0a;
+  --color-surface: #121212;     /* 어두운 회색 (패널 배경 등) */
+  --color-primary: #00E0FF;     /* 시안(Cyan) 색상 (하이라이트/버튼) */
+  --color-secondary: #33FF57;   /* 녹색 (보조) */
+
+  /* 폰트 설정 (필요시) */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* 3. 기본 글로벌 스타일 재정의 */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: white; /* 기본 글자색 흰색 */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  /* 폰트 렌더링 최적화 */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
   min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+  /* 주의: 기존에 있던 display: flex, place-items: center는 절대 넣지 마세요! */
 }
