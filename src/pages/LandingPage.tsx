@@ -54,7 +54,7 @@ const LandingPage = () => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
-  // ✅ POST /members/login 호출로 변경
+  // POST /members/login 호출로 변경
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -150,7 +150,7 @@ const LandingPage = () => {
             <button
               type='submit'
               disabled={!isFormValid}
-              className={`w-full py-4 rounded-lg font-bold text-sm transition-all duration-200 mt-8
+              className={`w-full cursor-pointer py-4 rounded-lg font-bold text-sm transition-all duration-200 mt-8
                 ${
                   isFormValid
                     ? 'bg-gray-200 text-black hover:bg-white shadow-[0_0_15px_rgba(255,255,255,0.1)]'
