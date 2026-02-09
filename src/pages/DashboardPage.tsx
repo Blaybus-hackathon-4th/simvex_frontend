@@ -4,12 +4,15 @@ import { Search } from 'lucide-react';
 
 import HeroBanner from '@/components/common/HeroBanner';
 import callApi, { HttpMethod } from '@/api/callApi';
-
 import emptyReadyImg from '@/assets/empty/ready.png';
-import { CATEGORIES, STUDY_HISTORY_CHANGED_EVENT, STUDY_HISTORY_STORAGE_KEY, type CategoryKo } from '@/constants';
 
+import { CATEGORIES, STUDY_HISTORY_CHANGED_EVENT, STUDY_HISTORY_STORAGE_KEY, type CategoryKo } from '@/constants';
 import type { ModelItem, ObjectsByIdsResponse, ObjectsListResponse } from '@/types';
+
 import { getStudyHistoryIds, pushStudyHistoryId } from '@/utils/studyHistoryStorage';
+
+//  검색 API 응답 타입 (result 구조가 목록조회와 동일하다고 가정)
+type ObjectsSearchResponse = ObjectsListResponse;
 
 // Swagger enum(서버) 매핑
 const CATEGORY_TO_ENUM: Record<Exclude<CategoryKo, '전체'>, string> = {
@@ -100,11 +103,11 @@ export default function DashboardPage() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryKo>('전체');
   const [query, setQuery] = useState('');
 
-  //  학습 가능한 모델 (/objects?category=...)
+  //   학습 가능한 모델
   const [availableModels, setAvailableModels] = useState<ModelItem[]>([]);
   const [isLoadingAvailable, setIsLoadingAvailable] = useState(false);
 
-  //  학습 기록 모델 (/objects/by-ids?ids=...)
+  //   학습 기록 모델
   const [historyModels, setHistoryModels] = useState<ModelItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -112,20 +115,52 @@ export default function DashboardPage() {
   const lastAvailableKey = useRef<string>('');
   const lastHistoryKey = useRef<string>('');
 
-  // -----------------------------------
-  // 1) 학습 가능한 모델: 목록 조회 호출
-  // -----------------------------------
+  //  검색 디바운스용 타이머
+  const searchDebounceRef = useRef<number | null>(null);
+
+  // ----------------------------------------------------
+  // 1) 학습 가능한 모델:
+  //    - query 없으면: /objects?category=...
+  //    - query 있으면: /objects/search?keyword=...
+  // ----------------------------------------------------
   useEffect(() => {
-    const fetchObjectsList = async () => {
+    const trimmed = query.trim();
+
+    const fetchAvailable = async () => {
       const categoryEnum =
         selectedCategory === '전체' ? undefined : CATEGORY_TO_ENUM[selectedCategory as Exclude<CategoryKo, '전체'>];
 
-      const requestKey = `LIST:${categoryEnum ?? 'ALL'}`;
+      //  requestKey: query 존재 시 SEARCH 우선
+      const requestKey = trimmed ? `SEARCH:${trimmed}` : `LIST:${categoryEnum ?? 'ALL'}`;
+
       if (lastAvailableKey.current === requestKey) return;
       lastAvailableKey.current = requestKey;
 
       setIsLoadingAvailable(true);
+
       try {
+        //  검색
+        if (trimmed) {
+          const url = `/objects/search?keyword=${encodeURIComponent(trimmed)}`;
+          const res = await callApi<ObjectsSearchResponse>(url, HttpMethod.GET);
+
+          const mapped: ModelItem[] =
+            res?.result?.map((o) => ({
+              id: String(o.objectId),
+              title: o.objectNameEn || o.objectNameKr,
+              desc: o.objectContent ?? o.objectcontent ?? '',
+              category: '검색결과',
+              thumb: o.objectImageUrl,
+              tags: (o.objectTags ?? []).slice(0, 2),
+            })) ?? [];
+
+          // (선택) 검색 결과를 현재 선택 카테고리로 필터링하고 싶다면
+          // 서버가 category를 안 주면 여기서 불가능. category 내려주면 필터 가능.
+          setAvailableModels(mapped);
+          return;
+        }
+
+        //  카테고리 목록 조회
         const url = categoryEnum ? `/objects?category=${categoryEnum}` : `/objects`;
         const res = await callApi<ObjectsListResponse>(url, HttpMethod.GET);
 
@@ -141,15 +176,28 @@ export default function DashboardPage() {
 
         setAvailableModels(mapped);
       } catch (e) {
-        console.error('Failed to fetch objects list:', e);
+        console.error('Failed to fetch available objects:', e);
         setAvailableModels([]);
       } finally {
         setIsLoadingAvailable(false);
       }
     };
 
-    fetchObjectsList();
-  }, [selectedCategory]);
+    //  디바운스 적용 (query 입력 중 과도 호출 방지)
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      fetchAvailable();
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        window.clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, [selectedCategory, query]);
 
   // -----------------------------------
   // 2) 학습 기록: by-ids 호출 (자동 갱신)
@@ -180,7 +228,7 @@ export default function DashboardPage() {
           tags: (o.objectTags ?? []).slice(0, 2),
         })) ?? [];
 
-      //  ids 순서 유지(최근 본 순)
+      // ids 순서 유지(최근 본 순)
       const order = new Map(ids.map((id, idx) => [id, idx]));
       mapped.sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
 
@@ -194,18 +242,14 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    // 최초 로드
     fetchHistoryByIds();
 
-    //  같은 탭: pushStudyHistoryId()가 쏴주는 이벤트로 갱신
     const onHistoryChanged = () => fetchHistoryByIds();
 
-    //  다른 탭: storage 이벤트로 갱신
     const onStorage = (e: StorageEvent) => {
       if (e.key === STUDY_HISTORY_STORAGE_KEY) fetchHistoryByIds();
     };
 
-    //  viewer 갔다가 뒤로 돌아오는 경우(포커스/탭 활성화)
     const onFocus = () => fetchHistoryByIds();
     const onVisibility = () => {
       if (document.visibilityState === 'visible') fetchHistoryByIds();
@@ -224,20 +268,15 @@ export default function DashboardPage() {
     };
   }, [fetchHistoryByIds]);
 
-  // 검색 필터
+  //  검색어는 학습기록도 필터(기존 유지)
   const filteredHistory = useMemo(() => {
-    return historyModels.filter((m) => {
-      const qOk = query ? (m.title + m.desc).toLowerCase().includes(query.toLowerCase()) : true;
-      return qOk;
-    });
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return historyModels;
+    return historyModels.filter((m) => (m.title + m.desc).toLowerCase().includes(trimmed));
   }, [historyModels, query]);
 
-  const filteredAvailable = useMemo(() => {
-    return availableModels.filter((m) => {
-      const qOk = query ? (m.title + m.desc).toLowerCase().includes(query.toLowerCase()) : true;
-      return qOk;
-    });
-  }, [availableModels, query]);
+  //  availableModels는 서버 검색 결과를 그대로 쓰기 때문에 로컬 필터는 보통 불필요
+  const filteredAvailable = availableModels;
 
   // 빈 상태 판단(카테고리별로 학습가능 모델이 없을 때)
   const isEmptyForCategory = selectedCategory !== '전체' && !isLoadingAvailable && filteredAvailable.length === 0;
@@ -305,7 +344,7 @@ export default function DashboardPage() {
               <EmptyState title={selectedCategory} />
             ) : (
               <>
-                {/*  학습 기록 */}
+                {/* 학습 기록 */}
                 <section className='mt-6'>
                   <div className='flex items-center justify-between'>
                     <h3 className='text-sm font-semibold text-white/80'>학습 기록</h3>
@@ -318,7 +357,6 @@ export default function DashboardPage() {
                         key={m.id}
                         item={m}
                         onClick={() => {
-                          //  학습기록에서 들어가도 최근순 갱신되게 저장
                           pushStudyHistoryId(m.id);
                           navigate(`/viewer/${m.id}`);
                         }}
@@ -327,10 +365,12 @@ export default function DashboardPage() {
                   </div>
                 </section>
 
-                {/*  학습 가능한 모델 */}
+                {/* 학습 가능한 모델 */}
                 <section className='mt-10'>
                   <div className='flex items-center justify-between'>
-                    <h3 className='text-sm font-semibold text-white/80'>학습 가능한 모델</h3>
+                    <h3 className='text-sm font-semibold text-white/80'>
+                      {query.trim() ? '검색 결과' : '학습 가능한 모델'}
+                    </h3>
                     {isLoadingAvailable && <span className='text-xs text-white/50'>불러오는 중...</span>}
                   </div>
 
@@ -340,7 +380,6 @@ export default function DashboardPage() {
                         key={m.id}
                         item={m}
                         onClick={() => {
-                          //  여기서 저장이 누락되면 localStorage에 안 쌓임!
                           pushStudyHistoryId(m.id);
                           navigate(`/viewer/${m.id}`);
                         }}
