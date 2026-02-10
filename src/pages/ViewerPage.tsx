@@ -28,7 +28,7 @@ const DUMMY_OBJECT_DATA: ObjectDetailResult = {
             nameKr: "피스톤",
             nameEn: "Piston",
             description: "피스톤 더미 설명",
-            modelUrl: "/src/assets/models/v4_engine/Piston.glb",
+            modelUrl: "/models/v4_engine/Piston.glb",
             transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
         },
         {
@@ -36,7 +36,7 @@ const DUMMY_OBJECT_DATA: ObjectDetailResult = {
             nameKr: "크랭크샤프트",
             nameEn: "Crankshaft",
             description: "크랭크축 더미 설명",
-            modelUrl: "/src/assets/models/v4_engine/Crankshaft.glb",
+            modelUrl: "/models/v4_engine/Crankshaft.glb",
             transform: { position: [0, -2, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
         }
         // ... 필요한 더미 모델 추가
