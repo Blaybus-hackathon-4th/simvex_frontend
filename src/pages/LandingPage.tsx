@@ -74,7 +74,7 @@ const LandingPage = () => {
       const res = await callApi<LoginResponse>('/members/login', HttpMethod.POST, body);
 
       if (res?.isSuccess) {
-        // [수정] 스토어의 login 함수 호출 시 instId 전달
+        // 스토어의 login 함수 호출 시 instId 전달
         // instId는 state에 저장된 현재 선택된 기관 ID입니다.
         login(instId);
 
