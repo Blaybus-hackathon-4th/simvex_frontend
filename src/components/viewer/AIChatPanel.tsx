@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, Bot, Sparkles, AlertCircle, ChevronDown, MessageSquare } from 'lucide-react';
 import callApi, { HttpMethod } from '@/api/callApi';
 
-// --- [Type Definitions based on API Images] ---
+// --- [Type Definitions] ---
 interface ChatMessage {
     chatContent: string;
     senderType: 'USER' | 'AI';
@@ -23,7 +23,11 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [sessionId, setSessionId] = useState<number | null>(null); // 현재 대화 세션 ID
+
+    // 세션 관련 State
+    const [chatSessions, setChatSessions] = useState<ChatSession[]>([]); // 전체 세션 목록
+    const [sessionId, setSessionId] = useState<number | null>(null);     // 현재 세션 ID
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);           // 이력 메뉴 토글
 
     // Auto-scroll ref
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -34,45 +38,66 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
 
     // [API 1] 대화 내역 조회 (GET /chat/{objectId})
     const fetchChatHistory = async () => {
+        if (!objectId) return;
+
         try {
             const res = await callApi<{ result: ChatSession[] }>(
                 `/chat/${objectId}`,
                 HttpMethod.GET
             );
 
-            if (res?.result && res.result.length > 0) {
-                // 가장 최근 세션을 가져옵니다 (또는 UX에 따라 선택 로직 추가 가능)
-                // 여기서는 마지막 세션을 이어가는 것으로 가정
-                const lastSession = res.result[res.result.length - 1];
-                setSessionId(lastSession.chatSessionId);
-                setMessages(lastSession.chatMessages);
+            if (res?.result && Array.isArray(res.result) && res.result.length > 0) {
+                // 전체 세션 목록 저장
+                setChatSessions(res.result);
+
+                // 현재 선택된 세션이 없다면 가장 최근 세션(마지막)을 로드
+                if (!sessionId) {
+                    const lastSession = res.result[res.result.length - 1];
+                    setSessionId(lastSession.chatSessionId);
+                    setMessages(lastSession.chatMessages || []);
+                } else {
+                    // 이미 보고 있던 세션이 있다면, 해당 세션의 최신 상태로 업데이트 (새 메시지 반영 등)
+                    const currentSession = res.result.find(s => s.chatSessionId === sessionId);
+                    if (currentSession) {
+                        setMessages(currentSession.chatMessages || []);
+                    }
+                }
+            } else {
+                setChatSessions([]);
+                setMessages([]);
+                setSessionId(null);
             }
         } catch (err) {
             console.error("Failed to fetch chat history:", err);
         }
     };
 
-    // 초기 로드 시 대화 내역 불러오기
+    // 초기 로드
     useEffect(() => {
-        if (objectId) {
-            fetchChatHistory();
-        }
+        fetchChatHistory();
     }, [objectId]);
 
-    // 메시지 업데이트 시 스크롤
+    // 메시지/세션 변경 시 스크롤
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, isLoading, sessionId]);
+
+    // 세션 변경 핸들러
+    const handleSwitchSession = (session: ChatSession) => {
+        setSessionId(session.chatSessionId);
+        setMessages(session.chatMessages || []);
+        setIsHistoryOpen(false); // 메뉴 닫기
+    };
 
     // [API 2] 대화 요청 (POST /chat/{objectId})
     const handleSendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
         const userMsg = input;
-        setInput(''); // 입력창 초기화
+        setInput('');
         setIsLoading(true);
 
-        // 낙관적 업데이트 (사용자 메시지 먼저 표시)
+        // 낙관적 업데이트
         const tempUserMessage: ChatMessage = { chatContent: userMsg, senderType: 'USER' };
         setMessages(prev => [...prev, tempUserMessage]);
 
@@ -80,22 +105,23 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
             const body = {
                 objectId: Number(objectId),
                 userMessage: userMsg,
-                chatSessionId: sessionId // 기존 세션이 있으면 ID 포함, 없으면 null/undefined
+                chatSessionId: sessionId
             };
 
-            // 백엔드 API 호출
             const res = await callApi<{ result: ChatSession[] }>(
                 `/chat/${objectId}`,
                 HttpMethod.POST,
                 body
             );
 
-            if (res?.result && res.result.length > 0) {
-                // 응답으로 전체 세션 리스트가 옴.
-                // 현재 세션(또는 새로 생성된 세션)을 찾아 메시지 업데이트
+            if (res?.result && Array.isArray(res.result)) {
+                // 응답으로 전체 세션 리스트가 온다고 가정 시 업데이트
+                setChatSessions(res.result);
+
+                // 현재 세션 찾아서 메시지 갱신
                 const updatedSession = sessionId
                     ? res.result.find(s => s.chatSessionId === sessionId)
-                    : res.result[res.result.length - 1]; // 세션 없었으면 가장 최근꺼(새로 생긴거)
+                    : res.result[res.result.length - 1]; // 없으면 새 세션(마지막)
 
                 if (updatedSession) {
                     setSessionId(updatedSession.chatSessionId);
@@ -104,8 +130,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
             }
         } catch (err) {
             console.error("Failed to send message:", err);
-            // 에러 표시용 메시지 추가
-            setMessages(prev => [...prev, { chatContent: "오류가 발생했습니다. 다시 시도해주세요.", senderType: 'AI' }]);
+            setMessages(prev => [...prev, { chatContent: "죄송합니다. 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", senderType: 'AI' }]);
         } finally {
             setIsLoading(false);
         }
@@ -119,24 +144,77 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
 
     return (
         <div className="flex flex-col h-full relative">
-            {/* 1. Header Area (ViewerRightSidebar에서 타이틀은 제어하지만, 내부 컨텐츠 시작점) */}
-            <div className="flex items-center gap-2 mb-6 px-1">
-                <div className="p-2 bg-purple-500/20 rounded-lg">
-                    <Sparkles size={20} className="text-purple-400" />
+
+            {/* Header Area */}
+            <div className="flex items-center justify-between mb-6 px-1 relative z-20">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-purple-500/20 rounded-lg">
+                        <Sparkles size={20} className="text-purple-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white">AI 어시스턴트</h2>
+                        <p className="text-xs text-purple-300">궁금한 점을 물어보세요</p>
+                    </div>
                 </div>
-                <div>
-                    <h2 className="text-xl font-bold text-white">AI 어시스턴트</h2>
-                    <p className="text-xs text-purple-300">궁금한 점을 자유롭게 물어보세요</p>
+
+                {/* [NEW] 채팅 이력 드롭다운 트리거 */}
+                <div className="relative">
+                    <button
+                        onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                        className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors py-1 px-2 rounded-md hover:bg-white/5"
+                    >
+                        <span>채팅 이력</span>
+                        <ChevronDown size={14} className={`transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* [NEW] 드롭다운 메뉴 */}
+                    {isHistoryOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-[#252525] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                            <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                {chatSessions.length === 0 ? (
+                                    <div className="p-4 text-center text-xs text-gray-500">
+                                        이전 대화 내역이 없습니다.
+                                    </div>
+                                ) : (
+                                    // 최신순 정렬 (ID 내림차순)
+                                    [...chatSessions].reverse().map((session) => (
+                                        <button
+                                            key={session.chatSessionId}
+                                            onClick={() => handleSwitchSession(session)}
+                                            className={`w-full text-left px-3 py-2.5 rounded-lg mb-1 flex items-start gap-2 transition-colors
+                                                ${sessionId === session.chatSessionId
+                                                ? 'bg-purple-500/20 text-white'
+                                                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                            }`}
+                                        >
+                                            <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-70" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-medium truncate">
+                                                    {session.chatSessionTitle || `대화 세션 ${session.chatSessionId}`}
+                                                </div>
+                                                <div className="text-[10px] opacity-50 truncate mt-0.5">
+                                                    {session.chatMessages[session.chatMessages.length - 1]?.chatContent || "대화 내용 없음"}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* 2. Chat Messages Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6 pb-4">
+            {/* Chat Messages Area */}
+            <div
+                className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6 pb-4 relative z-10"
+                onClick={() => setIsHistoryOpen(false)} // 배경 클릭 시 메뉴 닫기
+            >
                 {messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4 opacity-60 mt-10">
                         <Bot size={48} strokeWidth={1.5} />
                         <p className="text-sm text-center">
-                            "피스톤은 어떻게 움직이는거야?"<br/>
+                            "피스톤은 어떤 역할을 해?"<br/>
                             라고 물어보세요.
                         </p>
                     </div>
@@ -155,10 +233,10 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
 
                             {/* Message Bubble */}
                             <div
-                                className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed rounded-2xl
+                                className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed rounded-2xl whitespace-pre-wrap
                                     ${msg.senderType === 'USER'
                                     ? 'bg-[#2a2a2a] text-gray-200 rounded-tr-sm'
-                                    : 'text-gray-100' // AI 메시지는 배경 없이 텍스트만 깔끔하게 (이미지 참고)
+                                    : 'text-gray-100'
                                 }`}
                             >
                                 {msg.chatContent}
@@ -183,10 +261,10 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* 3. Input Area */}
-            <div className="mt-auto pt-4 pb-2">
+            {/* Input Area */}
+            <div className="mt-auto pt-4 pb-2 z-20 bg-[#161616]">
                 <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl opacity-20 group-focus-within:opacity-100 transition duration-500 blur-xs"></div>
+                    <div className="absolute -inset-0.5 bg-linear-to-r from-purple-600 to-blue-600 rounded-xl opacity-20 group-focus-within:opacity-100 transition duration-500 blur-xs"></div>
                     <div className="relative flex items-center bg-[#1e1e1e] rounded-xl overflow-hidden">
                         <input
                             type="text"
