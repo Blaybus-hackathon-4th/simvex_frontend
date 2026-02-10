@@ -8,33 +8,29 @@ import {
 } from 'lucide-react';
 
 import { ModelViewer } from '@/components/three/ModelViewer';
+import NotePanel from '@/components/viewer/NotePanel'; // [Import 추가]
 import { useViewerStore } from '@/store/viewerStore';
 import callApi, { HttpMethod } from '@/api/callApi';
 import type { ObjectDetailResult, ComponentDetailResult } from '@/types';
 
-// [1] 더미 데이터 정의 (API 실패 시 사용)
+// --- [Dummy Data for Fallback] ---
 const DUMMY_OBJECT_DATA: ObjectDetailResult = {
     objectId: 1,
     objectNameKr: "V4 엔진 (Dummy)",
     objectNameEn: "V4 Engine",
     discription: {
         objectContent: "이 데이터는 API 호출 실패 시 표시되는 더미 데이터입니다. V4 엔진은 4개의 실린더가 V자 형태로 배열된 내연기관입니다.",
-        principle: [
-            "API 연결 상태를 확인해주세요.",
-            "현재 더미 모드로 동작 중입니다.",
-            "4행정 사이클(흡입-압축-폭발-배기)로 동작합니다."
-        ],
+        principle: ["API 연결 상태를 확인해주세요.", "현재 더미 모드로 동작 중입니다.", "4행정 사이클로 동작합니다."],
         structuralAdvantages: ["컴팩트한 사이즈", "높은 출력 밀도"],
         designConstraints: ["복잡한 배기 구조"]
     },
     models: [
-        // 실제 로컬에 있는 glb 파일 경로로 수정해서 테스트하세요
         {
             modelId: 1,
             nameKr: "피스톤",
             nameEn: "Piston",
             description: "피스톤 더미 설명",
-            modelUrl: "/models/v4_engine/Piston.glb", // public/models 폴더에 파일이 있어야 보입니다.
+            modelUrl: "/models/v4_engine/Piston.glb",
             transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
         },
         {
@@ -72,31 +68,27 @@ const ViewerPage = () => {
     // [API 1] 초기 로드: 오브젝트 상세 조회
     useEffect(() => {
         const fetchObjectDetail = async () => {
-            // id가 없어도 더미 데이터 테스트를 위해 return 제거 가능 (필요 시)
-            if (!id) console.warn("No ID provided, defaulting to dummy ID 1");
+            if (!id) console.warn("No ID provided");
 
             try {
-                // 실제 호출: /api/v1/objects/{id}/details
                 const res = await callApi<{ result: ObjectDetailResult }>(
                     `/objects/${id}/details`,
                     HttpMethod.GET
                 );
-
                 if (res?.result) {
                     setObjectData(res.result);
                 } else {
-                    throw new Error("Result is empty"); // 강제로 catch로 보냄
+                    throw new Error("Result is empty");
                 }
             } catch (err) {
-                console.error("Failed to fetch object details (Using Dummy):", err);
-                // 에러 발생 시 더미 데이터 세팅
+                console.error("Failed to fetch object details:", err);
                 setObjectData(DUMMY_OBJECT_DATA);
             }
         };
         fetchObjectDetail();
     }, [id]);
 
-    // [API 2] 인터랙션: 부품 상세 조회 (selectedPartId 변경 시)
+    // [API 2] 인터랙션: 부품 상세 조회
     useEffect(() => {
         const fetchComponentDetail = async () => {
             if (!selectedPartId) {
@@ -108,19 +100,16 @@ const ViewerPage = () => {
                     `/objects/components/${selectedPartId}`,
                     HttpMethod.GET
                 );
-
                 if (res?.result) {
                     setComponentData(res.result);
                 } else {
                     throw new Error("Component Result is empty");
                 }
             } catch (err) {
-                console.error("Failed to fetch component details (Using Dummy):", err);
-                // 에러 발생 시 더미 데이터 세팅
-                // 실제로는 선택된 ID에 따라 내용을 바꿔야 하지만 테스트용이므로 고정값 사용
+                console.error("Failed to fetch component details:", err);
                 setComponentData({
                     ...DUMMY_COMPONENT_DATA,
-                    componentId: Number(selectedPartId), // 선택한 ID 반영하는 척
+                    componentId: Number(selectedPartId),
                     componentNameKr: `부품 ${selectedPartId} (Dummy)`
                 });
             }
@@ -134,7 +123,7 @@ const ViewerPage = () => {
     return (
         <div className="flex h-screen bg-[#111111] text-gray-100 overflow-hidden font-sans">
 
-            {/* 1. Header */}
+            {/* Header */}
             <header className="absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-linear-to-b from-black/80 to-transparent pointer-events-none">
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-full transition">
@@ -152,7 +141,7 @@ const ViewerPage = () => {
                 </div>
             </header>
 
-            {/* 2. Left Sidebar */}
+            {/* Left Sidebar */}
             <aside className="absolute left-6 top-24 w-64 z-40 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden flex flex-col max-h-[calc(100vh-150px)]">
                 <div className="p-4 border-b border-white/10 flex justify-between items-center">
                     <span className="text-sm font-bold text-gray-200">조립 상태</span>
@@ -192,7 +181,7 @@ const ViewerPage = () => {
                 </div>
             </aside>
 
-            {/* 3. Center (3D Canvas) */}
+            {/* Center (3D Canvas) */}
             <main className="flex-1 relative bg-linear-to-b from-[#1a1a1a] to-[#050505]">
                 <Canvas camera={{ position: [8, 6, 8], fov: 40 }}>
                     <Suspense fallback={<Html center><div className="text-blue-400 animate-pulse">Loading Engine...</div></Html>}>
@@ -200,7 +189,6 @@ const ViewerPage = () => {
                         <ambientLight intensity={0.5} />
                         <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow />
 
-                        {/* ModelViewer에 더미 데이터 모델 전달 */}
                         <ModelViewer models={objectData.models} />
 
                         <ContactShadows position={[0, -2, 0]} opacity={0.4} blur={2} />
@@ -213,13 +201,15 @@ const ViewerPage = () => {
                 </div>
             </main>
 
-            {/* 4. Right Sidebar */}
+            {/* Right Sidebar */}
             <aside className="w-[460px] bg-[#161616] border-l border-white/10 flex z-50 shadow-2xl">
 
-                {/* Content Area (왼쪽) */}
+                {/* Content Area */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+
+                    {/* 1. 설명 탭 */}
                     {activeTab === 'desc' && (
-                        <div className="space-y-8">
+                        <div className="space-y-8 animate-in fade-in duration-300">
                             <div>
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="p-2 bg-white/5 rounded-lg">
@@ -318,7 +308,15 @@ const ViewerPage = () => {
                         </div>
                     )}
 
-                    {activeTab !== 'desc' && (
+                    {/* 2. 노트 탭 (분리된 컴포넌트 사용) */}
+                    {activeTab === 'note' && (
+                        <div className="h-full">
+                            {id && <NotePanel objectId={id} />}
+                        </div>
+                    )}
+
+                    {/* 기타 탭 플레이스홀더 */}
+                    {(activeTab !== 'desc' && activeTab !== 'note') && (
                         <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
                             <Bot size={40} className="opacity-20" />
                             <span className="text-sm">기능 준비 중입니다.</span>
