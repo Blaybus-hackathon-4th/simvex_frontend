@@ -176,3 +176,8 @@ export interface ComponentDetailResult {
     elementContent: string;
   }[];
 }
+
+export interface NoteItem {
+  noteId: number;
+  noteContent: string;
+}
