@@ -3,121 +3,96 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useViewerStore } from '@/store/viewerStore';
-import type {ModelViewerProps, PartMeshProps, SingleGLBLoaderProps} from "@/types";
+import type { Model3DInfo } from '@/types';
 
-// 개별 GLB 파일을 로드하는 컴포넌트
-const SingleGLBLoader = ({ url, index }: SingleGLBLoaderProps) => {
-    const { scene } = useGLTF(url);
+// index 파라미터 제거
+const PartModel = ({ model }: { model: Model3DInfo }) => {
+    // 실제 환경에서는 model.modelUrl 사용
+    const { scene } = useGLTF(model.modelUrl);
+    const meshRef = useRef<THREE.Group>(null);
 
-    // 모델마다 랜덤 분해 방향 설정
-    const explodeDir = useMemo(() => {
-        return new THREE.Vector3(
-            Math.sin(index * 123),
-            Math.cos(index * 234),
-            Math.sin(index * 345)
-        ).normalize();
-    }, [index]);
-
-    return (
-        <group>
-            {scene.children.map((child) => {
-                // THREE.Object3D가 Mesh인지 확인
-                if ((child as THREE.Mesh).isMesh) {
-                    const meshChild = child as THREE.Mesh;
-
-                    // 파일명에서 ID 추출 (예: /models/v4/piston.glb -> piston)
-                    const fileName = url.split('/').pop() || '';
-                    const partId = fileName.replace('.glb', '') || meshChild.uuid;
-
-                    return (
-                        <PartMesh
-                            key={meshChild.uuid}
-                            node={meshChild}
-                            partId={partId}
-                            explodeDir={explodeDir}
-                            explodeDist={5}
-                        />
-                    );
-                }
-                // Mesh가 아닌 경우(Group, Light 등) 그대로 렌더링
-                return <primitive key={child.uuid} object={child} />;
-            })}
-        </group>
-    );
-};
-
-// PartMesh 컴포넌트
-const PartMesh = ({ node, partId, explodeDir, explodeDist }: PartMeshProps) => {
-    const meshRef = useRef<THREE.Mesh>(null);
     const { sliderValue, selectedPartId, setSelectedPartId } = useViewerStore();
 
-    // 초기 위치 저장
-    const initialPos = useRef(node.position.clone());
+    // API에서 받은 Transform 적용
+    const initialPos = useMemo(() => new THREE.Vector3(...model.transform.position), [model]);
+    const initialRot = useMemo(() => new THREE.Euler(...model.transform.rotation), [model]);
+    const initialScale = useMemo(() => new THREE.Vector3(...model.transform.scale), [model]);
 
-    // Material Clone (원본 훼손 방지)
-    const material = useMemo(() => {
-        return node.material instanceof THREE.Material ? node.material.clone() : node.material;
-    }, [node.material]);
+    // 분해 방향 (중심점에서 바깥으로)
+    const explodeDir = useMemo(() => {
+        return initialPos.clone().normalize();
+    }, [initialPos]);
+
+    // Material 복제 (Highlight 처리를 위해)
+    const clone = useMemo(() => scene.clone(), [scene]);
 
     useFrame(() => {
         if (!meshRef.current) return;
 
-        // 1. 분해 애니메이션 로직
+        // 1. 분해 애니메이션
+        const explodeDist = 5; // 최대 분해 거리
         const progress = sliderValue / 100;
-        const targetPos = initialPos.current.clone().add(
-            explodeDir.clone().multiplyScalar(explodeDist * progress)
-        );
+        const targetPos = initialPos.clone().add(explodeDir.clone().multiplyScalar(explodeDist * progress));
+
         meshRef.current.position.lerp(targetPos, 0.1);
 
-        // 2. 하이라이트 로직
-        const isSelected = selectedPartId === partId;
+        // 2. 하이라이트/고스트 효과
+        const isSelected = selectedPartId === model.modelId.toString();
         const isGhostMode = selectedPartId !== null && !isSelected;
 
-        // Material 타입 단언: emissive 속성은 Standard/Physical Material에만 존재함
-        // 만약 BasicMaterial을 쓴다면 이 부분 로직 수정 필요
-        const mat = meshRef.current.material as THREE.MeshStandardMaterial;
+        // [최적화] traverse는 매 프레임 돌면 무거울 수 있으므로, 상태가 변했을 때만 실행하도록 리팩토링 고려 가능
+        // 현재 로직 유지 시:
+        clone.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh;
+                // Material 타입 단언 (필요 시 더 안전하게 체크)
+                const mat = mesh.material as THREE.MeshStandardMaterial;
 
-        // Material 속성 변경
-        if (mat.emissive) {
-            if (isSelected) {
-                mat.emissive.setHex(0x00E0FF);
-                mat.emissiveIntensity = 0.5;
-                mat.transparent = false;
-                mat.opacity = 1.0;
-            } else if (isGhostMode) {
-                mat.emissive.setHex(0x000000);
-                mat.transparent = true;
-                mat.opacity = 0.2;
-            } else {
-                mat.emissive.setHex(0x000000);
-                mat.transparent = false;
-                mat.opacity = 1.0;
+                if (mat) {
+                    // 기존 Material 속성 유지하면서 투명도만 조절
+                    if (isSelected) {
+                        mat.emissive.setHex(0x00E0FF);
+                        mat.emissiveIntensity = 0.3;
+                        mat.transparent = false;
+                        mat.opacity = 1;
+                    } else if (isGhostMode) {
+                        mat.emissive.setHex(0x000000);
+                        mat.transparent = true;
+                        mat.opacity = 0.1;
+                    } else {
+                        mat.emissive.setHex(0x000000);
+                        mat.transparent = false;
+                        mat.opacity = 1;
+                    }
+                }
             }
-        }
+        });
     });
 
     return (
         <primitive
-            object={node}
             ref={meshRef}
-            material={material}
+            object={clone}
+            position={initialPos}
+            rotation={initialRot}
+            scale={initialScale}
             onClick={(e: ThreeEvent<MouseEvent>) => {
                 e.stopPropagation();
-                console.log("Selected Part:", partId);
-                setSelectedPartId(partId);
+                setSelectedPartId(model.modelId.toString());
             }}
         />
     );
 };
 
-// 메인 ModelViewer 컴포넌트
-export const ModelViewer = ({ filePaths }: ModelViewerProps) => {
+// 메인 뷰어
+export const ModelViewer = ({ models }: { models: Model3DInfo[] }) => {
     const { setSelectedPartId } = useViewerStore();
 
     return (
-        <group dispose={null} onPointerMissed={() => setSelectedPartId(null)}>
-            {filePaths.map((path, index) => (
-                <SingleGLBLoader key={path} url={path} index={index} />
+        <group onPointerMissed={() => setSelectedPartId(null)}>
+            {/* map에서 index 제거 및 props 전달 제거 */}
+            {models.map((model) => (
+                <PartModel key={model.modelId} model={model} />
             ))}
         </group>
     );
