@@ -28,7 +28,7 @@ const DUMMY_OBJECT_DATA: ObjectDetailResult = {
             nameKr: "피스톤",
             nameEn: "Piston",
             description: "피스톤 더미 설명",
-            modelUrl: "/models/v4_engine/Piston.glb",
+            modelUrl: "/src/assets/models/v4_engine/Piston.glb",
             transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
         },
         {
@@ -36,7 +36,7 @@ const DUMMY_OBJECT_DATA: ObjectDetailResult = {
             nameKr: "크랭크샤프트",
             nameEn: "Crankshaft",
             description: "크랭크축 더미 설명",
-            modelUrl: "/models/v4_engine/Crankshaft.glb",
+            modelUrl: "/src/assets/models/v4_engine/Crankshaft.glb",
             transform: { position: [0, -2, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
         }
         // ... 필요한 더미 모델 추가
@@ -69,16 +69,30 @@ const ViewerPage = () => {
     useEffect(() => {
         const fetchObjectDetail = async () => {
             if (!id) console.warn("No ID provided");
+
             try {
+                // API 호출은 하되, 현재 모델 경로가 깨져 있으므로 로그만 찍음
                 const res = await callApi<{ result: ObjectDetailResult }>(
                     `/objects/${id}/details`,
                     HttpMethod.GET
                 );
+
+                console.log("API Response:", res); // API 응답 확인용 로그
+
+                // [수정 포인트]
+                // 백엔드 경로("assets/models/...")가 해결될 때까지
+                // 강제로 더미 데이터를 사용하여 에러를 방지합니다.
+                console.warn("⚠️ 모델 로딩 에러 방지를 위해 더미 데이터를 사용합니다.");
+                setObjectData(DUMMY_OBJECT_DATA);
+
+                /* // 나중에 백엔드 경로가 고쳐지면 아래 코드로 원복하세요.
                 if (res?.result) {
-                    setObjectData(res.result);
+                     setObjectData(res.result);
                 } else {
-                    throw new Error("Result is empty");
+                     throw new Error("Result is empty");
                 }
+                */
+
             } catch (err) {
                 console.error("Failed to fetch object details:", err);
                 setObjectData(DUMMY_OBJECT_DATA);
