@@ -40,7 +40,7 @@ const ModelCard = ({ item, onClick }: { item: ModelItem; onClick: () => void }) 
         <div className='relative aspect-video rounded-xl overflow-hidden bg-[#20242C]'>
           {item.thumb ? (
               <img
-                  // [수정] http -> https 강제 변환 (Mixed Content 에러 방지)
+                  // http -> https 강제 변환 (Mixed Content 에러 방지)
                   src={item.thumb.replace('http://', 'https://')}
                   alt={item.title}
                   className='h-full w-full object-cover transition-transform duration-300 group-hover:scale-105'
@@ -337,7 +337,7 @@ export default function DashboardPage() {
                         {isLoadingHistory && <span className='text-xs text-white/50'>불러오는 중...</span>}
                       </div>
 
-                      {/* [수정] Grid 레이아웃 통일: lg:grid-cols-3 xl:grid-cols-4 */}
+                      {/* Grid 레이아웃 통일: lg:grid-cols-3 xl:grid-cols-4 */}
                       <div className='mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                         {filteredHistory.map((m) => (
                             <ModelCard
@@ -361,7 +361,7 @@ export default function DashboardPage() {
                         {isLoadingAvailable && <span className='text-xs text-white/50'>불러오는 중...</span>}
                       </div>
 
-                      {/* [수정] Grid 레이아웃 통일: lg:grid-cols-3 xl:grid-cols-4 */}
+                      {/* Grid 레이아웃 통일: lg:grid-cols-3 xl:grid-cols-4 */}
                       <div className='mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                         {filteredAvailable.map((m) => (
                             <ModelCard

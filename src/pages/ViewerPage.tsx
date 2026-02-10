@@ -79,7 +79,6 @@ const ViewerPage = () => {
 
                 console.log("API Response:", res); // API 응답 확인용 로그
 
-                // [수정 포인트]
                 // 백엔드 경로("assets/models/...")가 해결될 때까지
                 // 강제로 더미 데이터를 사용하여 에러를 방지합니다.
                 console.warn("⚠️ 모델 로딩 에러 방지를 위해 더미 데이터를 사용합니다.");
@@ -137,7 +136,7 @@ const ViewerPage = () => {
         <div className="flex h-screen bg-[#111111] text-gray-100 overflow-hidden font-sans">
 
             {/* 1. Header (공통 헤더) */}
-            <header className="absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+            <header className="absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-linear-to-b from-black/80 to-transparent pointer-events-none">
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <button onClick={() => navigate(-1)} className="cursor-pointer p-2 hover:bg-white/10 rounded-full transition">
                         <ChevronLeft className="w-6 h-6 text-gray-300" />

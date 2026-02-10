@@ -32,7 +32,7 @@ const ViewerLeftSidebar = ({
 
             {/* 1-1. Mini Map / Status Box (상단 미니맵 영역) */}
             <div className="bg-[#1e1e1e]/90 backdrop-blur-md border border-white/10 rounded-xl p-1 relative group overflow-hidden shrink-0">
-                <div className="relative w-full h-32 bg-[#121212] rounded-lg border border-blue-500/30 flex items-center justify-center overflow-hidden">
+                <div className="relative w-full h-32 bg-surface rounded-lg border border-blue-500/30 flex items-center justify-center overflow-hidden">
                     {/* 미니맵 3D 뷰어 */}
                     <Canvas camera={{ position: [10, 10, 10], fov: 50 }}>
                         <Suspense fallback={null}>
@@ -53,7 +53,7 @@ const ViewerLeftSidebar = ({
             </div>
 
             {/* 1-2. Controls & List Container (하단 리스트 영역) */}
-            {/* [수정] max-h 값을 isListOpen 상태에 따라 동적으로 변경하여 부드럽게 접히도록 함 */}
+            {/* max-h 값을 isListOpen 상태에 따라 동적으로 변경하여 부드럽게 접히도록 함 */}
             <div className={`flex-1 bg-[#1e1e1e]/90 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${isListOpen ? 'max-h-150' : 'max-h-40'}`}>
 
                 {/* 조립 상태 슬라이더 */}
@@ -84,7 +84,7 @@ const ViewerLeftSidebar = ({
                         </span>
                     </div>
 
-                    {/* [수정] isListOpen 상태에 따라 아이콘 변경 (ChevronDown <-> ChevronRight) */}
+                    {/* isListOpen 상태에 따라 아이콘 변경 (ChevronDown <-> ChevronRight) */}
                     {isListOpen ? (
                         <ChevronDown size={16} className="text-gray-400 transition-colors" />
                     ) : (
