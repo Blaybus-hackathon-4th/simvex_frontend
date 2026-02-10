@@ -72,29 +72,64 @@ const ViewerPage = () => {
     // [API 1] 초기 로드: 오브젝트 상세 조회
     useEffect(() => {
         const fetchObjectDetail = async () => {
-            if (!id) console.warn("No ID provided");
+            if (!id) return;
 
             try {
-                // API 호출은 하되, 현재 모델 경로가 깨져 있으므로 로그만 찍음
                 const res = await callApi<{ result: ObjectDetailResult }>(
                     `/objects/${id}/details`,
                     HttpMethod.GET
                 );
 
-                console.log("API Response:", res); // API 응답 확인용 로그
-
-                // 백엔드 경로("assets/models/...")가 해결될 때까지
-                // 강제로 더미 데이터를 사용하여 에러를 방지합니다.
-                console.warn("⚠️ 모델 로딩 에러 방지를 위해 더미 데이터를 사용합니다.");
-                setObjectData(DUMMY_OBJECT_DATA);
-
-                /* // 나중에 백엔드 경로가 고쳐지면 아래 코드로 원복하세요.
                 if (res?.result) {
-                     setObjectData(res.result);
+                    console.log("📡 Original API Data:", res.result);
+
+                    // 1. 0번째 모델(전체 껍데기) 제거
+                    const componentModels = res.result.models.slice(1);
+
+                    // 2. [수정] ID와 로컬 폴더명 매핑 테이블 (이미지 기준)
+                    // API의 ID가 무엇인지에 따라 정확한 폴더명을 지정합니다.
+                    const FOLDER_MAP: Record<string, string> = {
+                        '1': 'v4_engine',       // 언더바 사용
+                        '2': 'drone',
+                        '4': 'leaf spring',     // 띄어쓰기 사용
+                        '5': 'machine vice',    // 띄어쓰기 사용
+                        '6': 'robot arm',       // 띄어쓰기 사용
+                        '7': 'robot gripper',   // 띄어쓰기 사용
+                        '8': 'suspension',
+                        // ... 추가되는 모델 ID에 맞춰 작성
+                    };
+
+                    // 현재 ID에 맞는 폴더명을 찾고, 없으면 기본값으로 'v4_engine' 사용
+                    const folderName = FOLDER_MAP[id] || 'v4_engine';
+
+                    // 3. 로컬 경로 변환
+                    const localModels = componentModels.map(model => {
+                        // URL에서 파일명만 추출
+                        const fileName = model.modelUrl.split('/').pop();
+
+                        // 파일명 공백 처리 ('+' -> ' ')
+                        const cleanFileName = fileName ? decodeURIComponent(fileName.replace(/\+/g, ' ')) : '';
+
+                        return {
+                            ...model,
+                            // [핵심] 위에서 찾은 folderName을 경로에 삽입
+                            modelUrl: `/models/${folderName}/${cleanFileName}`
+                        };
+                    });
+
+                    // 변환된 데이터로 State 업데이트
+                    const transformedData = {
+                        ...res.result,
+                        models: localModels
+                    };
+
+                    console.log("📂 Converted Local Data:", transformedData);
+                    setObjectData(transformedData);
+
                 } else {
-                     throw new Error("Result is empty");
+                    console.warn("⚠️ API 결과 없음, 더미 데이터 사용");
+                    setObjectData(DUMMY_OBJECT_DATA);
                 }
-                */
 
             } catch (err) {
                 console.error("Failed to fetch object details:", err);
