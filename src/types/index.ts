@@ -181,3 +181,12 @@ export interface NoteItem {
   noteId: number;
   noteContent: string;
 }
+
+export interface QuizData {
+  question: string;       // 문제 텍스트
+  targetPartId: string;   // 정답 부품 ID
+  hint: string;           // 오답 시 보여줄 힌트
+  successMessage: string; // 정답 시 보여줄 해설/축하 메시지
+}
+
+export type TabType = 'quiz' | 'desc' | 'ai' | 'note' ;

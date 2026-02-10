@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, Sparkles, AlertCircle, ChevronDown, MessageSquare, Loader2 } from 'lucide-react';
 import callApi, { HttpMethod } from '@/api/callApi';
+import { useLearningStore } from '@/store/learningStore'; // [NEW] 1. 스토어 임포트
 
 // --- [Type Definitions] ---
 interface ChatMessage {
@@ -32,6 +33,9 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
     const [sessionId, setSessionId] = useState<number | null>(null);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+    // [NEW] 2. 학습 포인트 적립 액션 가져오기
+    const addChatInteraction = useLearningStore(state => state.addChatInteraction);
+
     // Auto-scroll ref
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -42,9 +46,25 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
         }, 100);
     };
 
+    // [NEW] 3. 채팅 메시지가 업데이트될 때마다 LocalStorage에 저장
+    // (QuizModePanel에서 퀴즈 생성 시 이 데이터를 사용함)
+    useEffect(() => {
+        if (messages.length > 0) {
+            // 퀴즈 패널에서 읽어갈 수 있도록 저장 구조를 맞춤
+            const storageKey = `chat-storage-${objectId}`;
+            const storageData = {
+                state: {
+                    messages: messages
+                }
+            };
+            localStorage.setItem(storageKey, JSON.stringify(storageData));
+        }
+    }, [messages, objectId]);
+
+
     // [API 1] 대화 내역 조회
     const fetchChatHistory = async () => {
-        if (!objectId) return null; // Polling에서 사용하기 위해 return 값 추가
+        if (!objectId) return null;
 
         try {
             const res = await callApi<{ result: ChatSession[] }>(
@@ -56,7 +76,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
             );
 
             if (res?.result && Array.isArray(res.result) && res.result.length > 0) {
-                return res.result; // 데이터 반환
+                return res.result;
             }
             return [];
         } catch (err) {
@@ -110,7 +130,10 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
         setInput('');
         setIsLoading(true);
 
-        // 1. 낙관적 업데이트 (사용자 메시지 즉시 표시)
+        // [NEW] 4. 메시지 전송 시 학습 포인트 2점 추가
+        addChatInteraction(objectId);
+
+        // 1. 낙관적 업데이트
         const tempUserMessage: ChatMessage = { chatContent: userMsg, senderType: 'USER' };
         setMessages(prev => [...prev, tempUserMessage]);
         scrollToBottom();
@@ -123,7 +146,6 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
                 chatSessionId: sessionId
             };
 
-            // POST 요청은 "요청 접수"의 의미로 보냄 (응답에 바로 AI 답변이 없을 수 있음)
             await callApi(
                 `/chat/${objectId}`,
                 HttpMethod.POST,
@@ -132,25 +154,22 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
                 { timeout: 60000 }
             );
 
-            // 3. Polling 시작 (AI 답변이 올 때까지 반복 조회)
+            // 3. Polling 시작
             let attempts = 0;
-            const maxAttempts = 30; // 최대 30회 시도 (2초 * 30 = 약 60초 대기)
+            const maxAttempts = 30;
             let aiResponded = false;
 
             while (attempts < maxAttempts) {
                 await wait(2000); // 2초 대기
                 attempts++;
 
-                // 최신 데이터 조회 (GET)
                 const sessions = await fetchChatHistory();
 
                 if (sessions && sessions.length > 0) {
-                    // 현재 세션 찾기 (없으면 최신 세션으로 간주 - 새 세션 생성 시)
                     let currentSession;
                     if (sessionId) {
                         currentSession = sessions.find(s => s.chatSessionId === sessionId);
                     } else {
-                        // 세션 ID가 없었다면 방금 생성된 최신 세션 찾기
                         currentSession = sessions.reduce((prev, current) =>
                             (prev.chatSessionId > current.chatSessionId) ? prev : current
                         );
@@ -159,13 +178,13 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
                     if (currentSession && currentSession.chatMessages.length > 0) {
                         const lastMsg = currentSession.chatMessages[currentSession.chatMessages.length - 1];
 
-                        // [조건 충족] 마지막 메시지가 AI인 경우 Polling 종료
+                        // AI 응답 확인
                         if (lastMsg.senderType === 'AI') {
                             setChatSessions(sessions);
                             setSessionId(currentSession.chatSessionId);
                             setMessages(currentSession.chatMessages);
                             aiResponded = true;
-                            break; // Loop 종료
+                            break;
                         }
                     }
                 }

@@ -4,10 +4,11 @@ import { OrbitControls, Environment, ContactShadows, Html } from '@react-three/d
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Share2 } from 'lucide-react';
 import { ModelViewer } from '@/components/three/ModelViewer';
-import ViewerSidebar from '@/components/viewer/ViewerLeftSidebar';      // 좌측 (조립/분해)
-import ViewerRightSidebar from '@/components/viewer/ViewerRightSidebar'; // 우측 (설명/노트)
+import ViewerSidebar from '@/components/viewer/ViewerLeftSidebar';
+import ViewerRightSidebar from '@/components/viewer/ViewerRightSidebar';
 
 import { useViewerStore } from '@/store/viewerStore';
+import { useLearningStore } from '@/store/learningStore'; // [NEW] 1. 스토어 임포트
 import callApi, { HttpMethod } from '@/api/callApi';
 import type { ObjectDetailResult, ComponentDetailResult } from '@/types';
 
@@ -61,6 +62,9 @@ const ViewerPage = () => {
     // Zustand Store
     const { sliderValue, setSliderValue, selectedPartId, setSelectedPartId } = useViewerStore();
 
+    // [NEW] 2. 학습 포인트 적립 액션 가져오기
+    const addPartInteraction = useLearningStore(state => state.addPartInteraction);
+
     // Local Data State
     const [objectData, setObjectData] = useState<ObjectDetailResult | null>(null);
     const [componentData, setComponentData] = useState<ComponentDetailResult | null>(null);
@@ -100,13 +104,19 @@ const ViewerPage = () => {
         fetchObjectDetail();
     }, [id]);
 
-    // [API 2] 인터랙션: 부품 상세 조회
+    // [API 2] 인터랙션: 부품 상세 조회 및 [학습 포인트 적립]
     useEffect(() => {
-        const fetchComponentDetail = async () => {
+        const handlePartInteraction = async () => {
             if (!selectedPartId) {
                 setComponentData(null);
                 return;
             }
+
+            // [NEW] 3. 부품 클릭 시 학습 포인트 적립 (1점)
+            if (id) {
+                addPartInteraction(id, selectedPartId);
+            }
+
             try {
                 const res = await callApi<{ result: ComponentDetailResult }>(
                     `/objects/components/${selectedPartId}`,
@@ -115,7 +125,25 @@ const ViewerPage = () => {
                 if (res?.result) {
                     setComponentData(res.result);
                 } else {
-                    throw new Error("Component Result is empty");
+                    // API 실패 시 Fallback: objectData에 있는 기본 정보라도 보여줌
+                    const fallbackModel = objectData?.models.find(m => m.modelId.toString() === selectedPartId);
+
+                    if (fallbackModel) {
+                        setComponentData({
+                            componentId: Number(fallbackModel.modelId),
+                            componentNameKr: fallbackModel.nameKr,
+                            componentNameEn: fallbackModel.nameEn,
+                            componentContent: fallbackModel.description,
+                            elements: []
+                        });
+                    } else {
+                        // 진짜 아무것도 없으면 더미 사용
+                        setComponentData({
+                            ...DUMMY_COMPONENT_DATA,
+                            componentId: Number(selectedPartId),
+                            componentNameKr: `부품 ${selectedPartId}`
+                        });
+                    }
                 }
             } catch (err) {
                 console.error("Failed to fetch component details:", err);
@@ -126,8 +154,8 @@ const ViewerPage = () => {
                 });
             }
         };
-        fetchComponentDetail();
-    }, [selectedPartId]);
+        handlePartInteraction();
+    }, [selectedPartId, id, addPartInteraction, objectData]); // 의존성 배열에 addPartInteraction 추가
 
     // 데이터 로딩 중 표시
     if (!objectData) return <div className="h-screen bg-black text-white flex items-center justify-center">Loading Data...</div>;
@@ -136,7 +164,7 @@ const ViewerPage = () => {
         <div className="flex h-screen bg-[#111111] text-gray-100 overflow-hidden font-sans">
 
             {/* 1. Header (공통 헤더) */}
-            <header className="absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-linear-to-b from-black/80 to-transparent pointer-events-none">
+            <header className="absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <button onClick={() => navigate(-1)} className="cursor-pointer p-2 hover:bg-white/10 rounded-full transition">
                         <ChevronLeft className="w-6 h-6 text-gray-300" />
@@ -146,7 +174,7 @@ const ViewerPage = () => {
                     </h1>
                 </div>
                 <div className="flex items-center gap-3 pointer-events-auto">
-                    <span className="text-xs text-gray-400 bg-black/40 px-3 py-1 rounded-full border border-white/10">학습 체크</span>
+                    {/* 학습 체크 뱃지는 ViewerRightSidebar에서 관리하므로 여기선 제거하거나 단순 장식용으로 둠 */}
                     <button className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white shadow-lg transition">
                         <Share2 size={18} />
                     </button>
