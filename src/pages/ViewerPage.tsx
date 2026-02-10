@@ -37,7 +37,7 @@ const ViewerPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  /** ✅ 학습/퀴즈/스토리지 모두 이 키로 통일 */
+  /** 학습/퀴즈/스토리지 모두 이 키로 통일 */
   const objectKey = String(id ?? '');
 
   const { sliderValue, setSliderValue, selectedPartId, setSelectedPartId } = useViewerStore();
@@ -97,7 +97,7 @@ const ViewerPage = () => {
       const componentId = Number(selectedPartId);
       if (Number.isNaN(componentId)) return;
 
-      /** ✅ 학습 포인트 적립도 objectKey로 통일 */
+      /** 학습 포인트 적립도 objectKey로 통일 */
       if (objectKey) addPartInteraction(objectKey, selectedPartId);
 
       try {

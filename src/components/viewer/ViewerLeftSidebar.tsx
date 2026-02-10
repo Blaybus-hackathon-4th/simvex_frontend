@@ -6,7 +6,7 @@ import { ModelViewer } from '@/components/three/ModelViewer';
 import type { ObjectDetailResult } from '@/types';
 
 interface ViewerSidebarProps {
-  objectId: string; // ✅ object id 받아서 폴더 매핑
+  objectId: string; // object id 받아서 폴더 매핑
   objectData: ObjectDetailResult;
   sliderValue: number;
   setSliderValue: (value: number) => void;
@@ -14,7 +14,7 @@ interface ViewerSidebarProps {
   setSelectedPartId: (id: string | null) => void;
 }
 
-/** ✅ ViewerPage와 동일한 폴더 매핑 */
+/** ViewerPage와 동일한 폴더 매핑 */
 const FOLDER_MAP: Record<string, string> = {
   '1': 'v4_engine',
   '2': 'drone',
@@ -36,14 +36,14 @@ function getCleanFileName(modelUrl: string) {
 }
 
 /**
- * ✅ 공백 폴더/파일명까지 안전하게 URL 인코딩
+ * 공백 폴더/파일명까지 안전하게 URL 인코딩
  * - public/models/leaf spring/Arm gear.glb 같은 케이스 대응
  */
 function buildThumbUrl(folderName: string, cleanFileName: string) {
   return `/models/${encodeURIComponent(folderName)}/${encodeURIComponent(cleanFileName)}`;
 }
 
-/** ✅ GLB 썸네일 컴포넌트 (작은 3D 미리보기) */
+/** GLB 썸네일 컴포넌트 (작은 3D 미리보기) */
 const PartThumb = memo(({ url }: { url: string }) => {
   const { scene } = useGLTF(url);
 
@@ -147,7 +147,7 @@ const ViewerLeftSidebar = ({
           {objectData.models.map((model) => {
             const isSelected = selectedPartId === model.modelId.toString();
 
-            // ✅ ViewerPage와 동일한 방식으로 파일명 추출 후 폴더 매핑 적용
+            // ViewerPage와 동일한 방식으로 파일명 추출 후 폴더 매핑 적용
             const cleanFileName = getCleanFileName(model.modelUrl);
             const thumbGlbUrl = buildThumbUrl(folderName, cleanFileName);
 
@@ -158,7 +158,7 @@ const ViewerLeftSidebar = ({
                 className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all group relative
                 ${isSelected ? 'bg-white/10 border border-white/5' : 'hover:bg-white/5 border border-transparent'}`}
               >
-                {/* ✅ 썸네일 */}
+                {/* 썸네일 */}
                 <div className='w-10 h-10 rounded-md bg-[#252525] flex items-center justify-center shrink-0 border border-white/5 overflow-hidden'>
                   <Suspense fallback={null}>
                     <PartThumb url={thumbGlbUrl} />

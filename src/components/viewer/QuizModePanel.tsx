@@ -23,7 +23,7 @@ const QuizModePanel = ({ objectId, selectedPartId, onClose }: QuizModePanelProps
   const [showHint, setShowHint] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  // ✅ selector로 안전하게 가져오기
+  // selector로 안전하게 가져오기
   const interactedParts = useLearningStore((state) => state.getLearningContext(objectId).interactedParts);
 
   const fetchQuiz = useCallback(async () => {
@@ -32,7 +32,7 @@ const QuizModePanel = ({ objectId, selectedPartId, onClose }: QuizModePanelProps
     setQuizData(null);
 
     try {
-      // ✅ chatHistory 파싱 안전 처리
+      // chatHistory 파싱 안전 처리
       const storedChat = localStorage.getItem(`chat-storage-${objectId}`);
       let chatHistory: any[] = [];
       if (storedChat) {

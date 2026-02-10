@@ -1,14 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  Send,
-  Bot,
-  Sparkles,
-  AlertCircle,
-  ChevronDown,
-  MessageSquare,
-  Loader2,
-  Plus, // ✅ NEW
-} from 'lucide-react';
+import { Send, Bot, Sparkles, AlertCircle, ChevronDown, MessageSquare, Loader2, Plus } from 'lucide-react';
 import callApi, { HttpMethod } from '@/api/callApi';
 import { useLearningStore } from '@/store/learningStore';
 
@@ -55,7 +46,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
     }, 100);
   };
 
-  // ✅ NEW: "새 대화" 시작
+  // "새 대화" 시작
   const handleNewChat = () => {
     if (isLoading) return; // 로딩 중에는 방지
     setIsHistoryOpen(false);
@@ -90,7 +81,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
     }
   };
 
-  // ✅ 수정: objectId 또는 sessionId 변경 시, 선택된 세션 메시지를 정확히 반영
+  // 수정: objectId 또는 sessionId 변경 시, 선택된 세션 메시지를 정확히 반영
   useEffect(() => {
     const initChat = async () => {
       const sessions = await fetchChatHistory();
@@ -98,7 +89,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
       if (sessions && sessions.length > 0) {
         setChatSessions(sessions);
 
-        // ✅ sessionId가 null이면: 최신 세션 자동 선택 (단, 새대화 중이면 messages가 비어있을 수 있음)
+        // sessionId가 null이면: 최신 세션 자동 선택 (단, 새대화 중이면 messages가 비어있을 수 있음)
         if (sessionId === null) {
           // "새 대화"를 눌러서 messages가 비어있는 상태라면 자동 선택하지 않고 유지하고 싶음
           // => messages가 비어 있고 사용자가 새 대화 상태면 그대로 둔다.
@@ -129,7 +120,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
     };
 
     initChat();
-    // ✅ deps에 sessionId 포함 (세션 전환 시 반영)
+    // deps에 sessionId 포함 (세션 전환 시 반영)
   }, [objectId, sessionId]);
 
   useEffect(() => {
@@ -163,7 +154,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
       const body = {
         objectId: Number(objectId),
         userMessage: userMsg,
-        chatSessionId: sessionId, // ✅ null이면 서버가 새 세션 생성
+        chatSessionId: sessionId, // null이면 서버가 새 세션 생성
       };
 
       await callApi(`/chat/${objectId}`, HttpMethod.POST, body, null, { timeout: 60000 });
@@ -180,7 +171,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
         const sessions = await fetchChatHistory();
         if (!sessions || sessions.length === 0) continue;
 
-        // ✅ 중요:
+        // 중요:
         // - sessionId가 null(새 세션)인 경우: 가장 최신 세션을 기준으로 본다
         // - sessionId가 있으면 해당 세션을 찾는다
         const currentSession =
@@ -194,7 +185,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
 
         if (lastMsg.senderType === 'AI') {
           setChatSessions(sessions);
-          setSessionId(currentSession.chatSessionId); // ✅ 새 세션이면 여기서 실제 id 확정됨
+          setSessionId(currentSession.chatSessionId); // 새 세션이면 여기서 실제 id 확정됨
           setMessages(currentSession.chatMessages);
           aiResponded = true;
           break;
@@ -236,7 +227,7 @@ const AIChatPanel = ({ objectId }: AIChatPanelProps) => {
         </div>
 
         <div className='flex items-center gap-2'>
-          {/* ✅ NEW: 새 대화 버튼 */}
+          {/* NEW: 새 대화 버튼 */}
           <button
             onClick={handleNewChat}
             disabled={isLoading}

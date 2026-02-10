@@ -20,7 +20,7 @@ interface LearningStore {
   resetProgress: (modelId: string) => void;
 }
 
-/** ✅ 매번 새 객체를 반환해서 참조 공유 방지 */
+/** 매번 새 객체를 반환해서 참조 공유 방지 */
 const createDefaultData = (): ModelLearningData => ({
   points: 0,
   clickedCount: 0,
