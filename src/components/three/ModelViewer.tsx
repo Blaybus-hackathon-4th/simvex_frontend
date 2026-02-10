@@ -1,99 +1,85 @@
-import { useRef, useMemo } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useRef, useEffect } from 'react';
+import { useLoader, useFrame } from '@react-three/fiber';
+import { GLTFLoader } from 'three-stdlib';
 import * as THREE from 'three';
-import { useViewerStore } from '@/store/viewerStore';
 import type { Model3DInfo } from '@/types';
 
-// index 파라미터 제거
-const PartModel = ({ model }: { model: Model3DInfo }) => {
-    // 실제 환경에서는 model.modelUrl 사용
-    const { scene } = useGLTF(model.modelUrl);
-    const meshRef = useRef<THREE.Group>(null);
+interface ModelViewerProps {
+    models: Model3DInfo[];
+    assemblyProgress: number;
+}
 
-    const { sliderValue, selectedPartId, setSelectedPartId } = useViewerStore();
+export const ModelViewer = ({ models, assemblyProgress }: ModelViewerProps) => {
+    const groupRef = useRef<THREE.Group>(null);
 
-    // API에서 받은 Transform 적용
-    const initialPos = useMemo(() => new THREE.Vector3(...model.transform.position), [model]);
-    const initialRot = useMemo(() => new THREE.Euler(...model.transform.rotation), [model]);
-    const initialScale = useMemo(() => new THREE.Vector3(...model.transform.scale), [model]);
+    // [최적화] initialTransforms는 렌더링마다 초기화되면 안 되므로 useRef 유지
+    const initialTransforms = useRef<{ [key: number]: { position: THREE.Vector3, rotation: THREE.Euler } }>({});
 
-    // 분해 방향 (중심점에서 바깥으로)
-    const explodeDir = useMemo(() => {
-        return initialPos.clone().normalize();
-    }, [initialPos]);
+    // 모든 모델 파일 로드
+    const gltfs = useLoader(GLTFLoader, models.map(model => model.modelUrl));
 
-    // Material 복제 (Highlight 처리를 위해)
-    const clone = useMemo(() => scene.clone(), [scene]);
+    useEffect(() => {
+        const group = groupRef.current;
+        if (!group) return;
+
+        // [중요] 기존에 추가된 모델이 있다면 제거 (중복 방지)
+        group.clear();
+
+        models.forEach((model, index) => {
+            const gltf = gltfs[index];
+            // 씬을 복제하여 독립적인 객체로 만듦
+            const object = gltf.scene.clone(true);
+
+            // API에서 받아온 transform 적용
+            object.position.set(...model.transform.position);
+            object.rotation.set(...model.transform.rotation);
+            object.scale.set(...model.transform.scale);
+
+            // 초기 위치/회전 저장 (애니메이션 기준점)
+            initialTransforms.current[model.modelId] = {
+                position: object.position.clone(),
+                rotation: object.rotation.clone()
+            };
+
+            // 식별을 위해 이름 설정
+            const modelGroup = new THREE.Group();
+            modelGroup.name = `model-${model.modelId}`;
+            modelGroup.add(object);
+
+            group.add(modelGroup);
+        });
+
+        // 언마운트 시 클린업
+        return () => {
+            group.clear();
+        };
+    }, [gltfs, models]);
 
     useFrame(() => {
-        if (!meshRef.current) return;
+        // Null Check (groupRef.current가 null일 수 있음을 처리)
+        if (!groupRef.current) return;
 
-        // 1. 분해 애니메이션
-        const explodeDist = 5; // 최대 분해 거리
-        const progress = sliderValue / 100;
-        const targetPos = initialPos.clone().add(explodeDir.clone().multiplyScalar(explodeDist * progress));
+        groupRef.current.children.forEach((child) => {
+            const modelId = Number(child.name.replace('model-', ''));
+            const initialTransform = initialTransforms.current[modelId];
 
-        meshRef.current.position.lerp(targetPos, 0.1);
+            if (initialTransform) {
+                const { position: initialPos } = initialTransform;
 
-        // 2. 하이라이트/고스트 효과
-        const isSelected = selectedPartId === model.modelId.toString();
-        const isGhostMode = selectedPartId !== null && !isSelected;
-
-        // [최적화] traverse는 매 프레임 돌면 무거울 수 있으므로, 상태가 변했을 때만 실행하도록 리팩토링 고려 가능
-        // 현재 로직 유지 시:
-        clone.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh;
-                // Material 타입 단언 (필요 시 더 안전하게 체크)
-                const mat = mesh.material as THREE.MeshStandardMaterial;
-
-                if (mat) {
-                    // 기존 Material 속성 유지하면서 투명도만 조절
-                    if (isSelected) {
-                        mat.emissive.setHex(0x00E0FF);
-                        mat.emissiveIntensity = 0.3;
-                        mat.transparent = false;
-                        mat.opacity = 1;
-                    } else if (isGhostMode) {
-                        mat.emissive.setHex(0x000000);
-                        mat.transparent = true;
-                        mat.opacity = 0.1;
-                    } else {
-                        mat.emissive.setHex(0x000000);
-                        mat.transparent = false;
-                        mat.opacity = 1;
-                    }
+                // 분해 방향 계산
+                const explodeDirection = initialPos.clone().normalize();
+                if (explodeDirection.length() === 0) {
+                    explodeDirection.set(0, 1, 0);
                 }
+
+                const explodeDistance = 5;
+                const explodedPos = initialPos.clone().add(explodeDirection.multiplyScalar(explodeDistance));
+
+                // 선형 보간 (Lerp)
+                child.position.lerpVectors(initialPos, explodedPos, assemblyProgress);
             }
         });
     });
 
-    return (
-        <primitive
-            ref={meshRef}
-            object={clone}
-            position={initialPos}
-            rotation={initialRot}
-            scale={initialScale}
-            onClick={(e: ThreeEvent<MouseEvent>) => {
-                e.stopPropagation();
-                setSelectedPartId(model.modelId.toString());
-            }}
-        />
-    );
-};
-
-// 메인 뷰어
-export const ModelViewer = ({ models }: { models: Model3DInfo[] }) => {
-    const { setSelectedPartId } = useViewerStore();
-
-    return (
-        <group onPointerMissed={() => setSelectedPartId(null)}>
-            {/* map에서 index 제거 및 props 전달 제거 */}
-            {models.map((model) => (
-                <PartModel key={model.modelId} model={model} />
-            ))}
-        </group>
-    );
+    return <group ref={groupRef} />;
 };
