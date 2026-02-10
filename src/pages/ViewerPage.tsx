@@ -12,78 +12,50 @@ import { useLearningStore } from '@/store/learningStore';
 import callApi, { HttpMethod } from '@/api/callApi';
 import type { ObjectDetailResult, ComponentDetailResult } from '@/types';
 
-// --- [Dummy Data for Fallback] ---
 const DUMMY_OBJECT_DATA: ObjectDetailResult = {
   objectId: 1,
   objectNameKr: 'V4 엔진 (Dummy)',
   objectNameEn: 'V4 Engine',
   discription: {
-    objectContent:
-      '이 데이터는 API 호출 실패 시 표시되는 더미 데이터입니다. V4 엔진은 4개의 실린더가 V자 형태로 배열된 내연기관입니다.',
-    principle: ['API 연결 상태를 확인해주세요.', '현재 더미 모드로 동작 중입니다.', '4행정 사이클로 동작합니다.'],
-    structuralAdvantages: ['컴팩트한 사이즈', '높은 출력 밀도'],
-    designConstraints: ['복잡한 배기 구조'],
+    objectContent: '더미 데이터입니다.',
+    principle: [],
+    structuralAdvantages: [],
+    designConstraints: [],
   },
-  models: [
-    {
-      modelId: 1,
-      nameKr: '피스톤',
-      nameEn: 'Piston',
-      description: '피스톤 더미 설명',
-      modelUrl: '/models/v4_engine/Piston.glb',
-      transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
-    },
-    {
-      modelId: 2,
-      nameKr: '크랭크샤프트',
-      nameEn: 'Crankshaft',
-      description: '크랭크축 더미 설명',
-      modelUrl: '/models/v4_engine/Crankshaft.glb',
-      transform: { position: [0, -2, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
-    },
-  ],
+  models: [],
 };
 
 const DUMMY_COMPONENT_DATA: ComponentDetailResult = {
   componentId: 1,
   componentNameKr: '피스톤 (Dummy)',
   componentNameEn: 'Piston',
-  componentContent: 'API 호출 실패로 로드된 피스톤 상세 정보입니다.',
-  elements: [
-    { elementName: '헤드', elementContent: '연소 압력을 받는 부위' },
-    { elementName: '스커트', elementContent: '실린더 내벽을 지지하는 부위' },
-  ],
+  componentContent: 'API 호출 실패 더미',
+  elements: [],
 };
 
 const ViewerPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  // Zustand Store
+  /** ✅ 학습/퀴즈/스토리지 모두 이 키로 통일 */
+  const objectKey = String(id ?? '');
+
   const { sliderValue, setSliderValue, selectedPartId, setSelectedPartId } = useViewerStore();
+  const addPartInteraction = useLearningStore((s) => s.addPartInteraction);
 
-  // 학습 포인트 적립
-  const addPartInteraction = useLearningStore((state) => state.addPartInteraction);
-
-  // Local State
   const [objectData, setObjectData] = useState<ObjectDetailResult | null>(null);
   const [componentData, setComponentData] = useState<ComponentDetailResult | null>(null);
 
-  // [API 1] 오브젝트 상세 조회
   useEffect(() => {
     const fetchObjectDetail = async () => {
-      if (!id) return;
+      if (!objectKey) return;
 
       try {
-        const res = await callApi<{ result: ObjectDetailResult }>(`/objects/${id}/details`, HttpMethod.GET);
+        const res = await callApi<{ result: ObjectDetailResult }>(`/objects/${objectKey}/details`, HttpMethod.GET);
 
         if (res?.result) {
-          console.log('📡 Original API Data:', res.result);
-
-          // 0번째 모델(전체 껍데기) 제거
           const componentModels = res.result.models.slice(1);
 
-          // ID -> 로컬 폴더명 매핑
           const FOLDER_MAP: Record<string, string> = {
             '1': 'v4_engine',
             '2': 'drone',
@@ -94,37 +66,27 @@ const ViewerPage = () => {
             '8': 'suspension',
           };
 
-          const folderName = FOLDER_MAP[id] || 'v4_engine';
+          const folderName = FOLDER_MAP[objectKey] || 'v4_engine';
 
-          // 로컬 경로 변환
           const localModels = componentModels.map((model) => {
-            const fileName = model.modelUrl.split('/').pop();
-            const cleanFileName = fileName ? decodeURIComponent(fileName.replace(/\+/g, ' ')) : '';
-
-            return {
-              ...model,
-              modelUrl: `/models/${folderName}/${cleanFileName}`,
-            };
+            const fileName = model.modelUrl.split('/').pop() ?? '';
+            const cleanFileName = decodeURIComponent(fileName.replace(/\+/g, ' '));
+            return { ...model, modelUrl: `/models/${folderName}/${cleanFileName}` };
           });
 
-          const transformedData = { ...res.result, models: localModels };
-
-          console.log('📂 Converted Local Data:', transformedData);
-          setObjectData(transformedData);
+          setObjectData({ ...res.result, models: localModels });
         } else {
-          console.warn('⚠️ API 결과 없음, 더미 데이터 사용');
           setObjectData(DUMMY_OBJECT_DATA);
         }
       } catch (err) {
-        console.error('Failed to fetch object details:', err);
+        console.error(err);
         setObjectData(DUMMY_OBJECT_DATA);
       }
     };
 
     fetchObjectDetail();
-  }, [id]);
+  }, [objectKey]);
 
-  // [API 2] 부품 상세 조회 (+ 학습 포인트)
   useEffect(() => {
     const handlePartInteraction = async () => {
       if (!selectedPartId) {
@@ -133,18 +95,12 @@ const ViewerPage = () => {
       }
 
       const componentId = Number(selectedPartId);
-      if (Number.isNaN(componentId)) {
-        console.warn('selectedPartId is not a number:', selectedPartId);
-        setComponentData(null);
-        return;
-      }
+      if (Number.isNaN(componentId)) return;
 
-      // 학습 포인트 적립
-      if (id) addPartInteraction(id, selectedPartId);
+      /** ✅ 학습 포인트 적립도 objectKey로 통일 */
+      if (objectKey) addPartInteraction(objectKey, selectedPartId);
 
       try {
-        // ✅ 이미지 스펙: GET /api/v1/objects/components/{componentId}
-        // callApi baseUrl이 이미 /api/v1 포함이면 "/api/v1" 제거하세요.
         const res = await callApi<{ result: ComponentDetailResult }>(
           `/api/v1/objects/components/${componentId}`,
           HttpMethod.GET
@@ -155,9 +111,7 @@ const ViewerPage = () => {
           return;
         }
 
-        // fallback
         const fallbackModel = objectData?.models.find((m) => Number(m.modelId) === componentId);
-
         if (fallbackModel) {
           setComponentData({
             componentId,
@@ -169,23 +123,15 @@ const ViewerPage = () => {
           return;
         }
 
-        setComponentData({
-          ...DUMMY_COMPONENT_DATA,
-          componentId,
-          componentNameKr: `부품 ${componentId}`,
-        });
+        setComponentData({ ...DUMMY_COMPONENT_DATA, componentId });
       } catch (err) {
-        console.error('Failed to fetch component details:', err);
-        setComponentData({
-          ...DUMMY_COMPONENT_DATA,
-          componentId,
-          componentNameKr: `부품 ${componentId} (Dummy)`,
-        });
+        console.error(err);
+        setComponentData({ ...DUMMY_COMPONENT_DATA, componentId });
       }
     };
 
     handlePartInteraction();
-  }, [selectedPartId, id, addPartInteraction, objectData]);
+  }, [selectedPartId, objectKey, addPartInteraction, objectData]);
 
   if (!objectData) {
     return <div className='h-screen bg-black text-white flex items-center justify-center'>Loading Data...</div>;
@@ -193,14 +139,14 @@ const ViewerPage = () => {
 
   return (
     <div className='flex h-screen bg-[#111111] text-gray-100 overflow-hidden font-sans'>
-      {/* Header */}
       <header className='absolute top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-6 bg-linear-to-b from-black/80 to-transparent pointer-events-none'>
         <div className='flex items-center gap-4 pointer-events-auto'>
           <button onClick={() => navigate(-1)} className='cursor-pointer p-2 hover:bg-white/10 rounded-full transition'>
             <ChevronLeft className='w-6 h-6 text-gray-300' />
           </button>
           <h1 className='text-lg font-bold tracking-wide text-white'>
-            {objectData.objectNameEn} <span className='text-gray-400 font-normal ml-2'>{objectData.objectNameKr}</span>
+            {objectData.objectNameEn}
+            <span className='text-gray-400 font-normal ml-2'>{objectData.objectNameKr}</span>
           </h1>
         </div>
         <div className='flex items-center gap-3 pointer-events-auto'>
@@ -210,9 +156,8 @@ const ViewerPage = () => {
         </div>
       </header>
 
-      {/* Left Sidebar */}
       <ViewerSidebar
-        objectId={id || ''} // ✅ 추가 (폴더 매핑용)
+        objectId={objectKey}
         objectData={objectData}
         sliderValue={sliderValue}
         setSliderValue={setSliderValue}
@@ -220,7 +165,6 @@ const ViewerPage = () => {
         setSelectedPartId={setSelectedPartId}
       />
 
-      {/* Main Canvas */}
       <main className='flex-1 relative bg-linear-to-b from-[#1a1a1a] to-[#050505]'>
         <Canvas camera={{ position: [8, 6, 8], fov: 40 }} gl={{ preserveDrawingBuffer: true }}>
           <Suspense
@@ -240,9 +184,8 @@ const ViewerPage = () => {
         </Canvas>
       </main>
 
-      {/* Right Sidebar */}
       <ViewerRightSidebar
-        objectId={id || ''}
+        objectId={objectKey}
         objectData={objectData}
         componentData={componentData}
         selectedPartId={selectedPartId}
