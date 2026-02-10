@@ -137,3 +137,42 @@ export type ObjectsListResponse = ApiResponse<ObjectSummary[]>;
 
 // /objects/by-ids?ids=1,2
 export type ObjectsByIdsResponse = ApiResponse<ObjectSummary[]>;
+
+// [API 1] 오브젝트 상세 조회
+export interface ObjectDetailResult {
+  objectId: number;
+  objectNameKr: string;
+  objectNameEn: string;
+  discription: { // API 오타 유지 (discription)
+    objectContent: string;
+    principle: string[];
+    structuralAdvantages: string[];
+    designConstraints: string[];
+  };
+  models: Model3DInfo[];
+}
+
+export interface Model3DInfo {
+  modelId: number;
+  nameKr: string;
+  nameEn: string;
+  description: string;
+  modelUrl: string;
+  transform: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  };
+}
+
+// [API 2] 부품 상세 조회
+export interface ComponentDetailResult {
+  componentId: number;
+  componentNameKr: string;
+  componentNameEn: string;
+  componentContent: string;
+  elements: {
+    elementName: string;
+    elementContent: string;
+  }[];
+}
