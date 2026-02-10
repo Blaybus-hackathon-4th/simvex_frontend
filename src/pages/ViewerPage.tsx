@@ -164,8 +164,8 @@ const ViewerPage = () => {
             />
 
             {/* 3. Center (Main 3D Canvas) */}
-            <main className="flex-1 relative bg-gradient-to-b from-[#1a1a1a] to-[#050505]">
-                <Canvas camera={{ position: [8, 6, 8], fov: 40 }}>
+            <main className="flex-1 relative bg-linear-to-b from-[#1a1a1a] to-[#050505]">
+                <Canvas camera={{ position: [8, 6, 8], fov: 40 }} gl={{ preserveDrawingBuffer: true }}>
                     <Suspense fallback={<Html center><div className="text-blue-400 animate-pulse">Loading Engine...</div></Html>}>
                         <Environment preset="city" />
                         <ambientLight intensity={0.5} />
